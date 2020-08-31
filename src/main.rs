@@ -7,6 +7,14 @@ const BOARD_SIZE: usize = 10;
 
 fn main() {
     App::build()
+        .add_resource(WindowDescriptor {
+            title: "Mine Sweeper".to_string(),
+            width: 600,
+            height: 600,
+            vsync: true,
+            resizable: false,
+            ..Default::default()
+        })
         .add_default_plugins()
         .init_resource::<State>()
         .add_resource(create_board())
@@ -35,6 +43,12 @@ fn setup(
 ) {
     commands.spawn(Camera2dComponents::default());
 
+    asset_server.load_asset_folder("assets/sprite").unwrap();
+    let tile_handle = asset_server.get_handle("assets/sprite/tile.png").unwrap();
+    let material = materials.add(ColorMaterial {
+        texture: Some(tile_handle),
+        color: Color::default(),
+    });
     let field_spacing = 1.0;
     let field_size = Vec2::new(40.0, 40.0);
     let field_width = BOARD_SIZE as f32 * (field_size.x() + field_spacing) - field_spacing;
@@ -44,7 +58,6 @@ fn setup(
         -(field_height - field_size.x()) / 2.0,
         0.0,
     );
-
     for (pos, tile) in board.revealed.iter().enumerate() {
         let x_pos = (pos / BOARD_SIZE) as f32 * (field_size.y() + field_spacing);
         let y_pos = (pos % BOARD_SIZE) as f32 * (field_size.y() + field_spacing);
@@ -53,22 +66,9 @@ fn setup(
         let translation = Translation(Vec3::new(x_pos, y_pos, 0.0) + field_offset);
         commands
             .spawn(SpriteComponents {
-                material: materials.add(Color::rgba(0.2, 0.2, 0.2, 0.1).into()),
+                material,
                 sprite: Sprite { size: field_size },
                 translation,
-                ..Default::default()
-            })
-            .with(TextComponents {
-                text: Text {
-                    value: format!("{}, {}", x, y),
-                    font: asset_server
-                        .load("assets/fonts/FiraMono-Medium.ttf")
-                        .unwrap(),
-                    style: TextStyle {
-                        font_size: 5.0,
-                        color: Color::WHITE,
-                    },
-                },
                 ..Default::default()
             })
             .with(Discovered(false))
@@ -112,6 +112,7 @@ fn mouse_movement_updating_system(
 }
 
 fn click_system(
+    asset_server: Res<AssetServer>,
     mouse: ResMut<Mouse>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut tile_query: Query<(
@@ -122,7 +123,7 @@ fn click_system(
     )>,
 ) {
     if mouse.clicked {
-        for (_, translation, sprite, color) in &mut tile_query.iter() {
+        for (_, translation, sprite, color_material) in &mut tile_query.iter() {
             let position = translation.truncate();
             let extents = sprite.size / 2.0;
             let min = position - extents;
@@ -130,8 +131,9 @@ fn click_system(
             if (min.x()..max.x()).contains(&mouse.world_pos.x())
                 && (min.y()..max.y()).contains(&mouse.world_pos.y())
             {
-                if let Some(color_material) = materials.get_mut(&color) {
-                    color_material.color = Color::rgb(1.0, 1.0, 1.0);
+                let mine_handle = asset_server.get_handle("assets/sprite/mine.png").unwrap();
+                if let Some(color_material) = materials.get_mut(&color_material) {
+                    color_material.texture = Some(mine_handle);
                 }
             }
         }
@@ -162,7 +164,7 @@ fn create_board() -> Board {
                 *elem += 1;
             }
 
-            generated_count = generated_count + 1;
+            generated_count += 1;
         }
         if generated_count >= BOARD_SIZE {
             break;
