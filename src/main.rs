@@ -59,17 +59,17 @@ fn setup(
         -(field_height - field_size.x()) / 2.0,
         0.0,
     );
-    for (pos, tile) in board.revealed.iter().enumerate() {
+    for (pos, _tile) in board.revealed.iter().enumerate() {
         let x_pos = (pos / BOARD_SIZE) as f32 * (field_size.y() + field_spacing);
         let y_pos = (pos % BOARD_SIZE) as f32 * (field_size.y() + field_spacing);
         let x = pos / BOARD_SIZE;
         let y = pos % BOARD_SIZE;
-        let translation = Translation(Vec3::new(x_pos, y_pos, 0.0) + field_offset);
+
         commands
             .spawn(SpriteComponents {
                 material,
-                sprite: Sprite { size: field_size },
-                translation,
+                sprite: Sprite::new(field_size),
+                transform: Transform::from_translation(Vec3::new(x_pos, y_pos, 0.0) + field_offset),
                 ..Default::default()
             })
             .with(Discovered(false))
@@ -95,17 +95,17 @@ fn mouse_movement_updating_system(
     windows: Res<Windows>,
     cursor_moved_events: Res<Events<CursorMoved>>,
     mouse_button_input: Res<Input<MouseButton>>,
-    mut query: Query<(&Camera, &Translation, &Scale)>,
+    mut query: Query<(&Camera, &Transform)>,
 ) {
     if let Some(cursor_moved) = state.cursor_moved_event_reader.latest(&cursor_moved_events) {
         mouse.pos = cursor_moved.position;
     }
     if let Some(window) = windows.get_primary() {
-        for (_camera_2d, translation, scale) in &mut query.iter() {
-            let cursor_x =
-                translation.0.x() + (mouse.pos[0] - (window.width as f32 * 0.5)) * scale.0;
-            let cursor_y =
-                translation.0.y() + (mouse.pos[1] - (window.height as f32 * 0.5)) * scale.0;
+        for (_camera_2d, transform) in &mut query.iter() {
+            let cursor_x = transform.translation().x()
+                + (mouse.pos[0] - (window.width as f32 * 0.5)) * transform.scale().x();
+            let cursor_y = transform.translation().y()
+                + (mouse.pos[1] - (window.height as f32 * 0.5)) * transform.scale().y();
             mouse.world_pos = [cursor_x, cursor_y].into();
         }
     }
@@ -117,11 +117,11 @@ fn click_system(
     asset_server: Res<AssetServer>,
     mouse: ResMut<Mouse>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut tile_query: Query<(Entity, &Interactable, &Translation, &Sprite, &X, &Y)>,
+    mut tile_query: Query<(Entity, &Interactable, &Transform, &Sprite, &X, &Y)>,
 ) {
     if mouse.clicked {
-        for (entity, _, translation, sprite, x, y) in &mut tile_query.iter() {
-            let position = translation.truncate();
+        for (entity, _, transform, sprite, x, y) in &mut tile_query.iter() {
+            let position = transform.translation().truncate();
             let extents = sprite.size / 2.0;
             let min = position - extents;
             let max = position + extents;
@@ -137,10 +137,8 @@ fn click_system(
                     .despawn(entity)
                     .spawn(SpriteComponents {
                         material,
-                        sprite: Sprite {
-                            size: Vec2::new(40.0, 40.0),
-                        },
-                        translation: *translation,
+                        sprite: Sprite::new(Vec2::new(40.0, 40.0)),
+                        transform: Transform::from_translation(transform.translation()),
                         ..Default::default()
                     })
                     .with(Discovered(false))
